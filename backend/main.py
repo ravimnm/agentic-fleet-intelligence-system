@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 from dependencies import get_db
 from dependencies import get_current_user
@@ -21,6 +22,8 @@ from api import (
     assistant_api,
 )
 from routes import bot as bot_router
+
+load_dotenv()
 
 # --------------------------------------------------
 # APP INITIALIZATION

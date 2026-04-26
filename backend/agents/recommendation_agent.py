@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 from database.mongo_client import MongoConnection
+from utils.llm_client import generate_response
 
 
 class RecommendationAgent:
@@ -53,4 +54,14 @@ class RecommendationAgent:
             self.db.insert("maintenance_recommendations", rec)
 
         return recommendations
+
+    def generate_ai_recommendation(self, telemetry: Dict[str, Any], prediction: Dict[str, Any], risk: Dict[str, Any]) -> str:
+        context = f"Telemetry: {telemetry}\nPrediction: {prediction}\nRisk: {risk}"
+        query = "Generate a maintenance recommendation with reasoning based on the vehicle data."
+        return generate_response(query, context)
+
+    def generate_llm_recommendation(self, telemetry: Dict[str, Any], prediction: Dict[str, Any], risk: Dict[str, Any]) -> str:
+        context = f"Telemetry: {telemetry}\nPrediction: {prediction}\nRisk: {risk}"
+        query = "Generate a natural language maintenance recommendation based on the vehicle data."
+        return generate_response(query, context)
 

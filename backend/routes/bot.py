@@ -4,6 +4,8 @@ from math import radians, sin, cos, sqrt, atan2
 
 from database.mongo_client import MongoConnection
 from dependencies import get_db, get_current_user
+from utils.llm_client import generate_response
+from utils.rag_pipeline import RAGPipeline
 
 router = APIRouter(prefix="/bot", tags=["bot"])
 
@@ -19,7 +21,7 @@ def haversine(lat1, lon1, lat2, lon2):
 
 @router.post("/chat")
 async def chat(payload: Dict[str, Any], db: MongoConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """Rule-based bot responding from local DB fields with enhanced responses.
+    """LLM-driven reasoning system with structured context.
 
     payload expected: { vehicleId: int, message: str }
     """
@@ -27,115 +29,39 @@ async def chat(payload: Dict[str, Any], db: MongoConnection = Depends(get_db), c
         raise HTTPException(status_code=400, detail="vehicleId is required")
 
     vid = int(payload["vehicleId"])
-    message = (payload.get("message") or "").lower()
+    message = payload.get("message", "")
 
     # RBAC
     if current_user.get("role") == "user":
         if current_user.get("vehicleId") is None or int(vid) != int(current_user.get("vehicleId")):
             raise HTTPException(status_code=403, detail="Forbidden: access to this vehicle is denied")
 
-    # fetch contextual data
-    risk = db.find_one("risk_logs", {"vehicleId": vid}, sort=[("timestamp", -1)])
-    prediction = db.find_one("predictions", {"vehicleId": vid}, sort=[("timestamp", -1)])
+    # Fetch vehicle data
     telemetry = db.find_one("telemetry", {"vehicleId": vid}, sort=[("timestamp", -1)])
-    recs = list(db.get_collection("maintenance_recommendations").find({"vehicleId": vid}).sort("timestamp", -1).limit(5))
-    service_centers = list(db.get_collection("service_centers").find({"open_now": True}).limit(10))
+    prediction = db.find_one("predictions", {"vehicleId": vid}, sort=[("timestamp", -1)])
+    risk = db.find_one("risk_logs", {"vehicleId": vid}, sort=[("timestamp", -1)])
 
-    # Intent: Explain health status
-    if any(k in message for k in ["explain", "health", "status"]):
-        if risk or prediction or telemetry:
-            resp = []
-            if risk:
-                resp.append(f"🔴 Risk Status: {risk.get('category').upper()} (score {risk.get('risk_score'):.2f})")
-            if prediction:
-                resp.append(f"⚠️ Prediction: {prediction.get('event') or prediction.get('predicted_event')} ({prediction.get('probability')*100:.1f}% probability)")
-            if telemetry:
-                resp.append(f"📍 Last Location: {telemetry.get('latitude', 'N/A')}, {telemetry.get('longitude', 'N/A')}")
-            if risk and risk.get("reasons"):
-                resp.append(f"📋 Reasons: {', '.join(risk.get('reasons', []))}")
-            return {"answer": "\n".join(resp)}
-        return {"answer": "No vehicle data available for analysis."}
+    # Get RAG context
+    rag = RAGPipeline(db)
+    rag_context = rag.get_context(message)
 
-    # Intent: Why is it risky
-    if any(k in message for k in ["why", "risky", "reason"]):
-        if risk and risk.get("reasons"):
-            return {"answer": f"Your vehicle is {risk.get('category').upper()} risk due to:\n• " + "\n• ".join(risk.get("reasons")) + f"\n\nRisk Score: {risk.get('risk_score'):.2f}"}
-        return {"answer": "No detailed risk analysis available. Please check with a technician."}
+    # Build structured prompt
+    telemetry_summary = f"Temperature: {telemetry.get('temperature', 'N/A')}, RPM: {telemetry.get('rpm', 'N/A')}, Location: {telemetry.get('latitude', 'N/A')},{telemetry.get('longitude', 'N/A')}" if telemetry else "No telemetry available"
+    prediction_summary = f"Predicted: {prediction.get('event', 'N/A')} with {prediction.get('probability', 0)*100:.1f}% probability" if prediction else "No prediction available"
+    risk_summary = f"Risk: {risk.get('category', 'N/A')} score {risk.get('risk_score', 0):.2f}" if risk else "No risk data available"
 
-    # Intent: Recommendations
-    if any(k in message for k in ["what should i do", "fix", "recommend", "maintenance"]):
-        if recs:
-            resp = ["Recommended Actions:\n"]
-            for idx, rec in enumerate(recs[:3], 1):
-                resp.append(f"{idx}. {rec.get('recommendation', rec.get('component', 'Vehicle inspection'))}")
-            return {"answer": "\n".join(resp)}
-        return {"answer": "No specific recommendations available. Consider scheduling a maintenance check."}
+    structured_context = f"""
+    Vehicle Data:
+    - Telemetry: {telemetry_summary}
+    - Prediction: {prediction_summary}
+    - Risk: {risk_summary}
+    - Retrieved Context: {rag_context}
+    """
 
-    # Intent: Latest prediction
-    if any(k in message for k in ["prediction", "predict", "fail"]):
-        if prediction:
-            event = prediction.get('event') or prediction.get('predicted_event')
-            prob = prediction.get('probability', 0)
-            resp = f"🔮 Latest Prediction:\nEvent: {event}\nProbability: {prob*100:.1f}%\n"
-            if prob > 0.7:
-                resp += "⚠️ High probability - consider immediate maintenance"
-            return {"answer": resp}
-        return {"answer": "No prediction data available."}
-
-    # Intent: Service centers
-    if any(k in message for k in ["service", "center", "repair", "garage", "nearby"]):
-        if service_centers:
-            resp = ["Available Service Centers (Open Now):\n"]
-            for idx, center in enumerate(service_centers[:3], 1):
-                rating = center.get('rating', 'N/A')
-                phone = center.get('phone', 'Contact for details')
-                resp.append(f"{idx}. {center.get('name', 'Service Center')} ⭐ {rating}\n   📞 {phone}")
-            resp.append("\n💡 For emergency assistance, ask 'nearest service center' for distance calculations")
-            return {"answer": "\n".join(resp)}
-        return {"answer": "No service centers available currently. Call roadside assistance for help."}
-
-    # Intent: Telemetry details
-    if any(k in message for k in ["telemetry", "sensor", "data", "temperature", "pressure", "rpm"]):
-        if telemetry:
-            resp = ["Current Vehicle Telemetry:\n"]
-            for key in ["temperature", "pressure", "rpm", "fuel", "voltage", "lat", "lng"]:
-                if key in telemetry:
-                    resp.append(f"• {key.upper()}: {telemetry[key]}")
-            return {"answer": "\n".join(resp)}
-        return {"answer": "No telemetry data available."}
-
-    # Intent: Breakdown assistance
-    if any(k in message for k in ["breakdown", "emergency", "help", "accident", "assistance"]):
-        risk_score = float(risk.get("risk_score", 0)) if risk else 0.0
-        prob = float(prediction.get("probability", 0)) if prediction else 0.0
-        if risk_score > 0.8 or prob > 0.85:
-            resp = ["🚨 BREAKDOWN ASSISTANCE\n"]
-            resp.append("Your vehicle requires immediate assistance.\n")
-            if service_centers:
-                closest = service_centers[0]
-                resp.append(f"Nearest Service Center: {closest.get('name')}\n")
-                resp.append(f"📞 {closest.get('phone', 'Contact for details')}\n")
-                resp.append(f"📍 Address: {closest.get('address', 'Check GPS')}\n")
-                resp.append(f"⭐ Rating: {closest.get('rating', 'N/A')}")
-            return {"answer": "\n".join(resp)}
-        return {"answer": "Your vehicle status is stable. No emergency assistance needed at this time."}
-
-    # Fallback: Comprehensive summary
-    summary = []
-    summary.append("📊 Vehicle Summary:\n")
-    if risk:
-        summary.append(f"Risk Level: {risk.get('category').upper()} ({risk.get('risk_score'):.2f})")
-    if prediction:
-        summary.append(f"Predicted Issue: {prediction.get('event') or prediction.get('predicted_event')}")
-    if recs:
-        summary.append(f"Recommended Actions: {len(recs)} pending")
-    if service_centers:
-        summary.append(f"Open Service Centers: {len(service_centers)} available")
-    
-    if len(summary) > 1:
-        return {"answer": "\n".join(summary)}
-
-    return {"answer": "I couldn't find relevant data. Try asking:\n• Explain my health\n• Why is it risky\n• What should I do\n• Where are service centers\n• Show me telemetry"}
+    # Generate reasoned response
+    from utils.llm_client import generate_reasoned_response
+    response = generate_reasoned_response(message, structured_context)
+    return {"answer": response}
 
 
 @router.get("/assist/breakdown/{vehicleId}")

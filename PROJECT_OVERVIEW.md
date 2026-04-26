@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-This is an **Agentic Fleet Predictive Maintenance & Risk Intelligence System** - an enterprise-grade prototype for managing vehicle fleets with AI-driven diagnostics, risk assessment, and maintenance recommendations.
+This is an **Agentic Fleet Predictive Maintenance & Risk Intelligence System** - an enterprise-grade prototype for managing vehicle fleets with AI-driven diagnostics, risk assessment, and maintenance recommendations. Now upgraded with **Gen-AI capabilities** including LLM-powered chatbot, RAG-based contextual responses, and AI-generated explanations.
 
 ---
 
@@ -10,14 +10,27 @@ This is an **Agentic Fleet Predictive Maintenance & Risk Intelligence System** -
 
 ```
 CSV Data → MongoDB → ML Model → Agent Chain → APIs → React Dashboard
+                                      ↓
+                    Hybrid Intelligence Layer (ML + LLM Co-Reasoning + RAG)
 ```
 
 The system follows a data pipeline:
 1. **Data Ingestion**: CSV telemetry files are loaded into MongoDB
 2. **ML Predictions**: Pre-trained scikit-learn model scores failure risk
 3. **Agent Orchestration**: Master agent coordinates specialized agents for analysis
-4. **API Layer**: FastAPI exposes data via RESTful endpoints with RBAC
-5. **Frontend**: React/Vite dashboard visualizes fleet health and agent actions
+4. **Hybrid Intelligence**: ML predictions + LLM reasoning + RAG context for intelligent decisions
+5. **API Layer**: FastAPI exposes data via RESTful endpoints with RBAC
+6. **Frontend**: React/Vite dashboard visualizes fleet health and agent actions
+
+**Intelligence Roles:**
+- **ML**: Statistical prediction and pattern recognition
+- **LLM**: Natural language reasoning, explanation generation, and decision synthesis
+- **RAG**: Contextual knowledge retrieval from vehicle data history
+
+**Design Tradeoff:**
+- ML used for deterministic, low-latency predictions
+- LLM used for reasoning, explanation, and decision synthesis
+- Hybrid approach balances performance, cost, and interpretability
 
 ---
 
@@ -74,12 +87,16 @@ backend/
 │
 ├── utils/                 # Utility Functions
 │   ├── agent_logger.py    # Log agent actions to timeline
-│   ├── explainability.py  # Generate explanations
+│   ├── explainability.py  # Generate explanations (ML + LLM)
 │   ├── csv_validator.py   # Validate CSV data
-│   └── time_utils.py      # Timestamp handling
+│   ├── time_utils.py      # Timestamp handling
+│   ├── llm_client.py      # OpenAI API wrapper
+│   ├── embedding.py       # Text embeddings for RAG
+│   ├── vector_store.py    # FAISS vector database
+│   └── rag_pipeline.py    # RAG context retrieval
 │
-└── scripts/               # Helper Scripts
-    └── seed_demo_data.py  # Bootstrap demo data
+├── config.py              # Environment configuration
+├── .env.example           # Environment variables template
 ```
 
 ### `frontend/` - React/Vite Dashboard
@@ -157,10 +174,14 @@ When telemetry arrives, `MasterAgent.process_telemetry()` executes:
 3. **DiagnosticsAgent** → Analyzes anomalies in telemetry
 4. **RiskAgent** → Combines prediction + diagnostics → Risk score (0-1)
 5. **SchedulingAgent** → Plans maintenance based on risk
-6. **RecommendationAgent** → Suggests driver actions
+6. **LLM-powered Recommendation Agent** → Synthesizes ML predictions, telemetry, and historical data to generate context-aware maintenance strategies with reasoning and trade-off analysis
 7. **FeedbackAgent** → Requests operator confirmation
 
 Each agent logs its reasoning to `agent_actions` collection → used by Agent Timeline page.
+
+**LLM Integration Strategy:**
+- LLM integration applied selectively (e.g., Recommendation Agent) where reasoning adds value
+- Deterministic agents retained for reliability and performance-critical tasks
 
 ### 3. ML Prediction Model
 - **Model Type**: scikit-learn trained model (26 features)
@@ -174,17 +195,27 @@ Each agent logs its reasoning to `agent_actions` collection → used by Agent Ti
 - Enforced via the mock `AuthContext` (stored in `localStorage`) — frontend automatically scopes views for `user` role
 - Backend enforces RBAC on key endpoints (for example: bot chat, breakdown assistance, telemetry/risk/predict) to prevent users from accessing other vehicles
 
-### 5. Rule-Based Assistant (FloatingAssistant)
-- Floating button (bottom-right corner) backed by a rule-based backend endpoint
-- DB-driven responses: the assistant now queries latest `risk_logs`, `predictions`, `telemetry`, `maintenance_recommendations`, and `service_centers` to craft more informative replies
-- Understands and provides expanded responses:
-  - "Explain my vehicle health" → Risk, prediction, last location, and reasons
-  - "Why is my risk high?" → Detailed risk factors and score
-  - "What should I do?" → Top maintenance recommendations from DB
-  - "Where are service centers / nearby" → Lists open service centers (phone, rating) and can trigger nearest calculations
-- Backend enforces RBAC for the assistant so users can only query their assigned vehicle
+### 5. Gen-AI Assistant (LLM + RAG)
+- **LLM Integration**: OpenAI GPT-4o-mini powered chatbot with natural language understanding
+- **RAG Pipeline**: FAISS vector store with sentence-transformers embeddings for contextual responses
+- **Embeddings updated periodically** from new telemetry and risk logs
+- **Top-k retrieval (3–5)** optimized for low-latency responses
+- **Context Sources**: Telemetry summaries, predictions, risk logs embedded and retrieved
+- **Response Flow**: Query → Embedding → Similarity Search → Context → LLM Generation
+- **RBAC Enforced**: Users can only query their assigned vehicle data
 
-### 6. Breakdown Assistance (EY Core Feature)
+### 6. AI-Generated Explanations
+- **Dual Explanations**: Traditional ML feature impact + LLM human-readable summaries
+- **LLM Explanations**: Converts technical ML outputs into natural language explanations
+- **Recommendation Agent**: Optional LLM-based generation of maintenance recommendations
+
+### 7. AI Decision Engine
+- **Hybrid Intelligence**: Combines ML predictions with LLM reasoning for data-driven decisions with contextual reasoning
+- **Evaluates possible maintenance actions with reasoning**: Analyzes maintenance approaches and trade-offs
+- **Justified Actions**: Generates actionable decisions with detailed reasoning
+- **Example Decision**: "Immediate service recommended due to high RPM + oil pressure anomaly correlation, risk of failure within 48 hours - prioritize brake inspection over general maintenance"
+
+### 8. Breakdown Assistance (EY Core Feature)
 - **Trigger**: Activates when risk > 0.8 OR prediction probability > 0.85
 - **Functionality**:
   - Auto-opens modal with nearby service centers
@@ -193,7 +224,14 @@ Each agent logs its reasoning to `agent_actions` collection → used by Agent Ti
   - Call & Navigate buttons
   - Demo centers seeded in MongoDB
 
----
+### 9. Intelligent Diagnostics (Gen-AI Use Case)
+Users can ask natural language questions like:
+**"Why is vehicle 102 high risk?"**
+
+**System Response:**
+- Retrieves relevant telemetry patterns, ML predictions, and risk assessments from vector store
+- Runs LLM reasoning engine to synthesize cause-effect relationships
+- Generates human-like explanation: *"Vehicle 102 shows elevated risk due to correlated anomalies: high RPM (3,200) combined with low oil pressure (28 PSI) over the last 48 hours, plus ML model predicting 78% brake failure probability. This suggests potential seal degradation in the brake system."*
 
 ## 🖥️ Frontend Pages
 
@@ -221,7 +259,7 @@ GET    /api/fleet/overview          - Fleet KPIs
 GET    /api/fleet/top-risk          - Top risky vehicles
 GET    /api/fleet/agent-actions     - Agent audit trail
 POST   /api/feedback                - Submit operator feedback
-POST   /api/bot/chat                - Rule-based bot responses
+POST   /api/bot/chat                - LLM-powered conversational AI with RAG context
 GET    /api/assist/breakdown/{id}   - Service centers for breakdown
 GET    /api/alerts                  - Get system alerts
 ```
@@ -236,6 +274,7 @@ GET    /api/alerts                  - Get system alerts
 | **Backend** | FastAPI, Python 3.10+, Uvicorn |
 | **Database** | MongoDB (local or cloud) |
 | **ML** | scikit-learn, Joblib, Pandas |
+| **Gen-AI** | OpenAI GPT-4o-mini, Sentence Transformers, FAISS Vector DB |
 | **Auth** | Mock localStorage headers (not JWT, no real auth) |
 
 ---
@@ -244,11 +283,14 @@ GET    /api/alerts                  - Get system alerts
 
 1. **Dependency Injection** - FastAPI `Depends()` for DB, agents, auth
 2. **Agent Pattern** - Each agent handles specific responsibility (SRP)
-3. **Audit Trail** - Every decision logged to `agent_actions`
-4. **Frontend Role Filtering** - UI-level role simulation coupled with backend RBAC on key endpoints
-5. **Explainability** - All predictions include reasoning
-6. **Resilience** - Missing data handled with median imputation
-7. **Responsive Design** - Tailwind CSS for mobile-friendly UI
+3. **RAG Architecture** - Retrieval-Augmented Generation for contextual AI responses
+4. **Vector Search** - FAISS-based similarity search for relevant context retrieval
+5. **LLM Integration** - Clean API wrapper pattern for external AI services
+6. **Audit Trail** - Every decision logged to `agent_actions`
+7. **Frontend Role Filtering** - UI-level role simulation coupled with backend RBAC on key endpoints
+8. **Explainability** - All predictions include reasoning (ML + LLM)
+9. **Resilience** - Missing data handled with median imputation
+10. **Modular AI** - Pluggable LLM providers and embedding models
 
 ---
 
@@ -257,8 +299,12 @@ GET    /api/alerts                  - Get system alerts
 **Prerequisites**: Python 3.10+, Node 18+, MongoDB running locally
 
 ```bash
+# Configure environment
+cd backend && cp .env.example .env
+# Edit .env with your OpenAI API key
+
 # Backend
-cd backend && pip install -r requirements.txt
+pip install -r requirements.txt
 uvicorn main:app --reload
 
 # Frontend (new terminal)
@@ -274,6 +320,10 @@ Access at `http://localhost:5173` (frontend proxies API to backend)
 
 ✅ **Multi-Agent System** - 7 specialized agents working in coordination  
 ✅ **ML-Powered Predictions** - Scikit-learn model with 26-feature inference  
+✅ **Gen-AI Assistant** - LLM-powered chatbot with RAG contextual responses  
+✅ **Vector Search RAG** - FAISS-based retrieval of relevant vehicle data  
+✅ **AI Explanations** - Dual ML + LLM explainability for predictions  
+✅ **LLM Recommendations** - Optional AI-generated maintenance suggestions  
 ✅ **Explainability** - Every prediction includes reasoning  
 ✅ **Role-Based UI** - Frontend role simulation with backend RBAC on key endpoints (users scoped to assigned vehicle)  
 ✅ **Real-Time Monitoring** - API-driven vehicle telemetry & risk scoring (near-real-time)  
@@ -284,4 +334,4 @@ Access at `http://localhost:5173` (frontend proxies API to backend)
 
 ---
 
-This is a **production-ready prototype** with complete feature implementation, RBAC, explainability, and enterprise-grade patterns! 🎉
+This is a **production-ready prototype** with complete feature implementation, RBAC, explainability, and **Gen-AI capabilities** including LLM chatbot and RAG! 🎉
