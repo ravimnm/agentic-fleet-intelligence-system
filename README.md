@@ -4,13 +4,14 @@
 
 This project is a **fleet risk intelligence and predictive maintenance platform** that combines:
 
-- telemetry ingestion  
-- machine learning-based failure prediction  
-- rule-based diagnostics  
-- modular processing (agent-style architecture)  
-- full-stack visualization  
+- telemetry ingestion
+- machine learning-based failure prediction
+- rule-based diagnostics
+- modular processing (agent-style architecture)
+- full-stack visualization
+- **Gen-AI capabilities** including LLM-powered chatbot, RAG-based contextual responses, and AI-generated explanations
 
-It is designed as a **production-style prototype** demonstrating backend architecture, ML integration, and decision workflows for fleet operations.
+It is designed as a **production-style prototype** demonstrating backend architecture, ML integration, decision workflows, and hybrid intelligence for fleet operations.
 
 ---
 
@@ -24,6 +25,8 @@ MongoDB (Telemetry Storage)
 ML Prediction Layer
 ↓
 Processing Pipeline (Agent Modules)
+↓
+Hybrid Intelligence Layer (ML + LLM Co-Reasoning + RAG)
 ↓
 FastAPI Backend (RBAC APIs)
 ↓
@@ -68,7 +71,7 @@ Risk Scoring
 ↓
 Maintenance Scheduling
 ↓
-Recommendations
+LLM-powered Recommendations
 ↓
 Feedback Logging
 
@@ -80,10 +83,10 @@ Feedback Logging
 - **DiagnosticsAgent** → analyzes telemetry patterns  
 - **RiskAgent** → computes overall risk score  
 - **SchedulingAgent** → generates maintenance plans  
-- **RecommendationAgent** → suggests actions  
+- **RecommendationAgent** → suggests actions (with LLM reasoning)  
 - **FeedbackAgent** → captures operator input  
 
-> Note: This is a **deterministic orchestration pipeline**, not a fully autonomous agent system.
+> Note: This is a **hybrid intelligence pipeline** combining deterministic agents with LLM-powered reasoning for context-aware decisions.
 
 ---
 
@@ -111,7 +114,22 @@ Feedback Logging
 
 ---
 
-### 4. API Layer (FastAPI)
+### 4. Gen-AI Capabilities
+
+- **LLM Integration**: OpenAI GPT-4o-mini for natural language reasoning and explanation generation
+- **RAG Pipeline**: FAISS vector store with sentence-transformers for contextual knowledge retrieval
+- **AI Assistant**: Conversational chatbot with vehicle-specific context
+- **Explainability**: Dual explanations - ML feature impact + LLM human-readable summaries
+- **Intelligent Recommendations**: LLM-powered maintenance suggestions with reasoning and trade-off analysis
+
+#### Intelligence Roles
+- **ML**: Statistical prediction and pattern recognition
+- **LLM**: Natural language reasoning, explanation generation, and decision synthesis
+- **RAG**: Contextual knowledge retrieval from vehicle data history
+
+---
+
+### 5. API Layer (FastAPI)
 
 #### Key Endpoints
 
@@ -137,7 +155,7 @@ GET /api/alerts
 
 ---
 
-### 5. Frontend (React + Vite)
+### 6. Frontend (React + Vite)
 
 #### Pages
 
@@ -157,7 +175,7 @@ GET /api/alerts
 
 ---
 
-### 6. Breakdown Assistance
+### 7. Breakdown Assistance
 
 Triggered when:
 
@@ -172,7 +190,7 @@ Provides:
 
 ---
 
-### 7. Audit & Explainability
+### 8. Audit & Explainability
 
 All system actions are logged:
 
@@ -196,6 +214,7 @@ Each record includes:
 | Backend | FastAPI, Python |
 | Database | MongoDB |
 | ML | scikit-learn, Pandas |
+| Gen-AI | OpenAI GPT-4o-mini, Sentence Transformers, FAISS Vector DB |
 | Visualization | Recharts |
 | Auth | Mock RBAC (localStorage + API checks) |
 
@@ -232,6 +251,7 @@ data/
 - Python 3.10+
 - Node.js 18+
 - MongoDB running locally
+- OpenAI API key (for Gen-AI features)
 
 ---
 
@@ -239,74 +259,68 @@ data/
 
 ```bash
 cd backend
+cp .env.example .env  # Configure OpenAI API key
 pip install -r requirements.txt
 uvicorn main:app --reload
-Frontend
+```
+
+### Frontend
+
+```bash
 cd frontend
 npm install
 npm run dev
-Access
+```
+
+### Access
+
 http://localhost:5173
-🧠 Design Principles
+## 🧠 Design Principles
 
-modular architecture (SRP)
+- modular architecture (SRP)
+- separation of ML and API layers
+- hybrid intelligence (ML + LLM + RAG)
+- auditability of decisions
+- explainable outputs
+- scalable backend structure
 
-separation of ML and API layers
+## ⚠️ Current Limitations
 
-auditability of decisions
+- deterministic pipeline with selective LLM integration (no fully autonomous planning)
+- no feedback loop / iterative reasoning
+- no event-driven architecture
+- no real-time streaming (Kafka, MQTT)
+- basic RBAC (no JWT / OAuth)
 
-explainable outputs
+## 🔮 Future Improvements
 
-scalable backend structure
+- planner + tool-based agent architecture
+- event-driven ingestion (Kafka / Redis streams)
+- real-time telemetry processing
+- feedback loop for post-maintenance evaluation
+- stronger authentication (JWT / OAuth)
+- model retraining pipeline
+- expanded LLM integration across all agents
 
-⚠️ Current Limitations
-
-deterministic pipeline (no autonomous planning)
-
-no feedback loop / iterative reasoning
-
-no event-driven architecture
-
-no real-time streaming (Kafka, MQTT)
-
-basic RBAC (no JWT / OAuth)
-
-🔮 Future Improvements
-
-planner + tool-based agent architecture
-
-event-driven ingestion (Kafka / Redis streams)
-
-real-time telemetry processing
-
-feedback loop for post-maintenance evaluation
-
-stronger authentication (JWT / OAuth)
-
-model retraining pipeline
-
-🎯 Purpose
+## 🎯 Purpose
 
 This project demonstrates:
 
-backend system design
+- backend system design
+- ML integration in production-style pipelines
+- modular processing architecture
+- hybrid intelligence (ML + LLM + RAG)
+- full-stack engineering capability
+- Gen-AI integration in enterprise applications
 
-ML integration in production-style pipelines
-
-modular processing architecture
-
-full-stack engineering capability
-
-📌 Summary
+## 📌 Summary
 
 A well-structured predictive maintenance system with:
 
-strong backend foundations
+- strong backend foundations
+- integrated ML pipeline
+- hybrid intelligence (ML + LLM + RAG)
+- clear observability
+- practical fleet use case
 
-integrated ML pipeline
-
-clear observability
-
-practical fleet use case
-
-It is not yet a fully autonomous agent system, but provides a solid base to evolve into one.
+It provides a solid base for evolving into a fully autonomous agent system with advanced Gen-AI capabilities.
